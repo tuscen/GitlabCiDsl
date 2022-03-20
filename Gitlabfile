@@ -1,0 +1,78 @@
+require_relative 'src/gitlab/dsl/job'
+
+include '/templates/ci.yml'
+include local: '/templates/quux.yml'
+include project: 'ci-generic',
+        file: 'netfx.yml',
+        ref: 'main'
+include '/templates/foobar.yml' if ctx.default_branch?
+
+variables BUILD_SCRIPT_PATH: ctx.project_dir / 'scripts' / 'build.ps1'
+
+stages :build, :deploy, :release
+
+workflow if: %($CI_BRANCH_NAME == "develop"),
+         when: :manual,
+         allow_failure: true
+
+job %(.build_backend) do
+  script %(
+    $fooBar = 5
+    $a = @(5, 6, 7, 8)
+    $cwd = [System.IO.Directory]::GetCurrentDirectory()
+  )
+  script %(
+    # another crazy powershell snippet here cuz I like to suffer
+  )
+  script 'do something in shell' if ENV['SOME_ENV_VARIABLE'] == 'FOOBAR'
+  needs :job_name1, :job_name2
+  needs %w[job_name1 job_name2]
+  rule(
+    if: %($CI_BRANCH_NAME == "develop"),
+    when: :manual,
+    allow_failure: true
+  )
+  environment(
+    name: %(dev/develop),
+    url: ENV['DYNAMIC_URL'],
+    on_stop: 'stop:dev'
+  )
+end
+
+job %(.deploy) do
+  script %(
+    pwsh -nologo scripts/ssh_deploy.ps1
+  )
+end
+
+job %(deploy:dev) do
+  extends %(.deploy)
+  environment(
+    name: ENV['ENVIRONMENT_NAME'],
+    action: 'start',
+    url: "https://#{ENV['APP_DOMAIN']}"
+  )
+end
+
+job %(deploy:dev) do
+  extends %(.deploy)
+  environment(
+    name: ENV['ENVIRONMENT_NAME'],
+    action: 'start',
+    url: "https://#{ENV['APP_DOMAIN']}"
+  )
+end
+
+class TestJob < Gitlab::Dsl::Job
+  configure do
+    script %(
+      $fooBar = 5
+      $a = @(5, 6, 7, 8)
+      $cwd = [System.IO.Directory]::GetCurrentDirectory()
+    )
+  end
+end
+
+job %(.build_backend_asda), TestJob do
+  before_script %(Write-Host "Hello world")
+end
